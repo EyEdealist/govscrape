@@ -1,0 +1,60 @@
+#!/user/bin/env node
+
+'use strict';
+
+var path = require('path'),
+    fs = require('fs'),
+    mkdirp = require('mkdirp'),
+    program = require('commander'),
+    util = require('../lib/util'),
+    billList = require('../lib/bill-list');
+
+program
+    .version('0.1.0')
+    .description('Scrape congress.gov for a list of bill summaries with links')
+    .option('-n, --congress <number>', 'congress number, default is current', parseInt)
+    .option('-c, --chamber <chamber>', 'congressional chamber [house,senate]')
+    .option('-d, --directory <path>', 'path to output directory for JSON data')
+    .parse(process.argv);
+
+var defaultDataDir = __dirname + '/../data';
+var dir = program.directory || defaultDataDir;
+var congress = program.congress || util.currentCongress();
+var file = path.join(dir, congress.toString(), 'bill-list.json');
+var query = {};
+
+if(program.congress) {
+    query.congress = program.congress;
+}
+if(program.chamber) {
+    query.chamber = program.chamber;
+}
+
+// create output directory if it doesn't exist
+mkdirp(dir = path.dirname(file), function(err) {
+    if(err) {
+        console.error('Unable to create directory: ' + dir);
+        throw err;
+    }
+
+    // scrape for bill list
+    console.time('bill-list');
+    billList.scrape(query, function(err, bills) {
+        console.log('bills found: ' + bills.length);
+        console.timeEnd('bill-list');
+
+        if(err) {
+            throw err;
+        }
+
+        // write bill-list to file
+        fs.writeFile(file, JSON.stringify(bills, null, 2), function(err) {
+            if(err) {
+                console.error('Unable to write bill list to file: ' + file);
+                throw err;
+            }
+
+            console.log('bill-list saved to: ' + file);
+        });
+    });
+});
